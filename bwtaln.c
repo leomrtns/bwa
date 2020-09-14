@@ -25,8 +25,7 @@ gap_opt_t *gap_init_opt()
 {
 	gap_opt_t *o;
 	o = (gap_opt_t*)calloc(1, sizeof(gap_opt_t));
-	/* IMPORTANT: s_mm*10 should be about the average base error
-	   rate. Voilating this requirement will break pairing! */
+	/* IMPORTANT: s_mm*10 should be about the average base error rate. Violating this requirement will break pairing! */
 	o->s_mm = 3; o->s_gapo = 11; o->s_gape = 4;
 	o->max_diff = -1; o->max_gapo = 1; o->max_gape = 6;
 	o->indel_end_skip = 5; o->max_del_occ = 10; o->max_entries = 2000000;
@@ -80,7 +79,8 @@ int bwt_cal_width(const bwt_t *bwt, int len, const ubyte_t *str, bwt_width_t *wi
 	return bid;
 }
 
-void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
+/* this function usually frees the seq/qual at the end, but we (leo) need it! */
+void bwa_cal_sa_reg_gap (int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
 {
 	int i, j, max_l = 0, max_len;
 	gap_stack_t *stack;
@@ -88,9 +88,8 @@ void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, 
 	gap_opt_t local_opt = *opt;
 
 	// initiate priority stack
-	for (i = max_len = 0; i != n_seqs; ++i)
-		if (seqs[i].len > max_len) max_len = seqs[i].len;
-	if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(max_len, BWA_AVG_ERR, opt->fnr);
+	for (i = max_len = 0; i != n_seqs; ++i) if (seqs[i].len > max_len) max_len = seqs[i].len;
+	if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff (max_len, BWA_AVG_ERR, opt->fnr);
 	if (local_opt.max_diff < local_opt.max_gapo) local_opt.max_gapo = local_opt.max_diff;
 	stack = gap_init_stack(local_opt.max_diff, local_opt.max_gapo, local_opt.max_gape, &local_opt);
 
@@ -110,16 +109,13 @@ void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, 
 		bwt_cal_width(bwt, p->len, p->seq, w);
 		if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr);
 		local_opt.seed_len = opt->seed_len < p->len? opt->seed_len : 0x7fffffff;
-		if (p->len > opt->seed_len)
-			bwt_cal_width(bwt, opt->seed_len, p->seq + (p->len - opt->seed_len), seed_w);
+		if (p->len > opt->seed_len) bwt_cal_width(bwt, opt->seed_len, p->seq + (p->len - opt->seed_len), seed_w);
 		// core function
-		for (j = 0; j < p->len; ++j) // we need to complement
-			p->seq[j] = p->seq[j] > 3? 4 : 3 - p->seq[j];
+		for (j = 0; j < p->len; ++j)  p->seq[j] = p->seq[j] > 3? 4 : 3 - p->seq[j];// we need to complement
 		p->aln = bwt_match_gap(bwt, p->len, p->seq, w, p->len <= opt->seed_len? 0 : seed_w, &local_opt, &p->n_aln, stack);
-		//fprintf(stderr, "mm=%lld,ins=%lld,del=%lld,gapo=%lld\n", p->aln->n_mm, p->aln->n_ins, p->aln->n_del, p->aln->n_gapo);
 		// clean up the unused data in the record
-		free(p->name); free(p->seq); free(p->rseq); free(p->qual);
-		p->name = 0; p->seq = p->rseq = p->qual = 0;
+		/* free(p->name); free(p->seq); free(p->rseq); free(p->qual);
+       p->name = 0; p->seq = p->rseq = p->qual = 0; */ // leo: we need those 
 	}
 	free(seed_w); free(w);
 	gap_destroy_stack(stack);
@@ -289,7 +285,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -E INT    gap extension penalty [%d]\n", opt->s_gape);
 		fprintf(stderr, "         -R INT    stop searching when there are >INT equally best hits [%d]\n", opt->max_top2);
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
-        fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
+    fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");
@@ -318,4 +314,45 @@ int bwa_aln(int argc, char *argv[])
 	bwa_aln_core(prefix, argv[optind+1], opt);
 	free(opt); free(prefix);
 	return 0;
+}
+
+/** added by leomrtns: bwt_t must be called outside this function, as well as opt_init(); other params may come from
+ * biomcmc's char_vector() */
+bwa_seq_t *bwa_aln_from_vector (const char *prefix, bwa_seq_t *seqs, int n_dnaseq, const gap_opt_t *opt) // BIOMCMC
+{
+  bwt_t *bwt;
+	clock_t t = clock();
+   { // load BWT
+    char *str = (char*)calloc(strlen(prefix) + 10, 1);
+    strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
+    free(str);
+   }
+
+#ifdef HAVE_PTHREAD
+  if (opt->n_threads <= 1) { // no multi-threading at all
+    bwa_cal_sa_reg_gap (0, bwt, n_dnaseq, seqs, opt);
+  } else {
+    pthread_t *tid;
+    pthread_attr_t attr;
+    thread_aux_t *data;
+    int j;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    data = (thread_aux_t*)calloc(opt->n_threads, sizeof(thread_aux_t));
+    tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
+    for (j = 0; j < opt->n_threads; ++j) {
+      data[j].tid = j; data[j].bwt = bwt;
+      data[j].n_seqs = n_dnaseq; data[j].seqs = seqs; data[j].opt = opt;
+      pthread_create(&tid[j], &attr, worker, data + j);
+    }
+    for (j = 0; j < opt->n_threads; ++j) pthread_join(tid[j], 0);
+    free(data); free(tid);
+  }
+#else
+  bwa_cal_sa_reg_gap (0, bwt, n_dnaseq, seqs, opt);
+#endif
+  fprintf(stderr, "%.5f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+
+	bwt_destroy(bwt);
+  return seqs;
 }
