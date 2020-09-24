@@ -26,8 +26,8 @@ typedef struct
 struct bwase_match_struct
 {
   bwase_elem_t *m;
-  bntseq_t *bns; /*! \brief index files with ref genome info */
-  char *prefix;
+  bntseq_t *bns; /*! \brief index files with ref genome info, bwase_match_ref_genome_name (match, i) to get ref name */
+  char *prefix; 
   int n_m, ref_counter;
 };
 
