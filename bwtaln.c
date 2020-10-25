@@ -351,7 +351,7 @@ bwa_seq_t *bwa_aln_from_vector (const char *prefix, bwa_seq_t *seqs, int n_dnase
 #else
   bwa_cal_sa_reg_gap (0, bwt, n_dnaseq, seqs, opt);
 #endif
-  fprintf(stderr, "%.5f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+  fprintf(stderr, "[bwa_aln_from_vector] %.5f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 
 	bwt_destroy(bwt);
   return seqs;
