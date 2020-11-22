@@ -64,6 +64,7 @@ bwase_options_t new_bwase_options_t (int level);
 bwa_seq_t *bwase_to_match_t (bwase_match_t match, bwa_seq_t *seqs, int n_dnaseq, int n_occ, gap_opt_t *opt);
 char *bwase_match_ref_genome_name (bwase_match_t match, int i);
 
+bwase_match_t new_bwase_match_t (const char *index_filename);
 void del_bwase_match_t (bwase_match_t match);
 /*! \brief high-level function that creates the bwase_match_t struct and finds matches to index files (defined by FASTA name */
 bwase_match_t new_bwase_match_from_bwa_and_char_vector (const char *index_filename, char_vector seqname, char_vector dnaseq, int n_occurrences, bwase_options_t bopt);
