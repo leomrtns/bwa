@@ -148,7 +148,7 @@ bwase_match_t
 new_bwase_match_t (const char *index_filename)
 {
   bwase_match_t match = (bwase_match_t) biomcmc_malloc (sizeof (struct bwase_match_struct));
-  match->prefix = save_bwa_index (index_filename, NULL, false); // generates index files
+  match->prefix = save_bwa_index (index_filename, NULL, false); // generates index files, but do not overwrite them 
   match->bns = bns_restore (match->prefix);
   match->m = NULL;
   match->n_m = 0;
